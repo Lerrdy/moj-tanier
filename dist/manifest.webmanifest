@@ -3,6 +3,7 @@
   "short_name": "Môj tanier",
   "description": "Súkromný offline denník jedla a malých každodenných víťazstiev.",
   "lang": "sk",
+  "id": "./",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
