@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="sk">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#32122f" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Môj tanier" />
+    <meta name="description" content="Súkromný offline denník jedla a malých každodenných víťazstiev." />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%2332122f'/%3E%3Ccircle cx='32' cy='32' r='19' fill='%23fff8ef'/%3E%3Ccircle cx='32' cy='32' r='11' fill='%23e75480'/%3E%3Cpath d='M32 17v30M17 32h30' stroke='%23fff8ef' stroke-width='3' opacity='.8'/%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="./styles.css?v=6" />
+    <title>Môj tanier</title>
+  </head>
+  <body>
+    <div id="offline-pill" class="offline-pill" hidden>Offline režim</div>
+
+    <main class="app-shell">
+      <section class="view is-active" data-view="today" aria-labelledby="today-title">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow" id="today-date">Dnes</p>
+            <h1 id="today-title" tabindex="-1">Ahoj, krásny deň.</h1>
+          </div>
+          <button class="avatar" type="button" data-go="settings" aria-label="Otvoriť nastavenia">M</button>
+        </header>
+
+        <article class="checkin-card" id="checkin-card">
+          <div class="checkin-copy">
+            <span class="mini-label">Rýchly check-in</span>
+            <h2>Ako to ide so sladkým?</h2>
+            <p id="checkin-note">Bez výčitiek. Len si zaznač, ako sa dnes máš.</p>
+          </div>
+          <div class="checkin-actions">
+            <button class="choice choice--good" id="kept-button" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4.2 4.2L19 6.5"/></svg>
+              Vydržala som
+            </button>
+            <button class="choice choice--treat" id="treat-button" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.7 5.7a5.3 5.3 0 0 0-7.5 0L12 6.9l-1.2-1.2a5.3 5.3 0 1 0-7.5 7.5L12 22l8.7-8.8a5.3 5.3 0 0 0 0-7.5Z"/></svg>
+              Dala som si
+            </button>
+          </div>
+        </article>
+
+        <section class="capture-block" aria-labelledby="capture-title">
+          <div>
+            <p class="eyebrow">Jedlo bez vypisovania</p>
+            <h2 id="capture-title">Čo máš na tanieri?</h2>
+          </div>
+          <button class="camera-button" type="button" data-photo-trigger="meal-photo">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 5.5 10 3.8h4l1.5 1.7H19a2 2 0 0 1 2 2v10.7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7.5a2 2 0 0 1 2-2h3.5Z"/><circle cx="12" cy="13" r="4"/></svg>
+            <span><strong>Odfoť jedlo</strong><small>Dátum a čas doplním za teba</small></span>
+          </button>
+          <input id="meal-photo" class="visually-hidden" type="file" accept="image/*" capture="environment" tabindex="-1" aria-hidden="true" />
+        </section>
+
+        <section class="today-list" aria-labelledby="today-list-title">
+          <div class="section-heading">
+            <h2 id="today-list-title">Dnes</h2>
+            <span id="today-count">0 záznamov</span>
+          </div>
+          <div id="today-items" class="entry-list" aria-live="polite"></div>
+        </section>
+      </section>
+
+      <section class="view" data-view="gallery" aria-labelledby="gallery-title" hidden>
+        <header class="page-header">
+          <div>
+            <p class="eyebrow">Tvoje spomienky</p>
+            <h1 id="gallery-title" tabindex="-1">Galéria jedál</h1>
+          </div>
+          <span class="count-badge" id="gallery-count">0</span>
+        </header>
+        <div class="gallery-empty" id="gallery-empty">
+          <img src="./gallery-empty.jpg" width="800" height="800" alt="Ilustrovaný tanier s raňajkami a fotografiou" />
+          <h2>Zatiaľ je tu voľné miesto</h2>
+          <p>Odfoť prvé jedlo. Fotka, dátum aj čas zostanú bezpečne v tomto iPhone.</p>
+          <button class="secondary-button" type="button" data-photo-trigger="gallery-photo">Pridať prvú fotku</button>
+          <input id="gallery-photo" class="visually-hidden" type="file" accept="image/*" capture="environment" tabindex="-1" aria-hidden="true" />
+        </div>
+        <div class="gallery-grid" id="gallery-grid" aria-live="polite"></div>
+      </section>
+
+      <section class="view" data-view="overview" aria-labelledby="overview-title" hidden>
+        <header class="page-header">
+          <div>
+            <p class="eyebrow">Všetko pokope</p>
+            <h1 id="overview-title" tabindex="-1">Prehľad</h1>
+          </div>
+        </header>
+
+        <section class="week-card" aria-labelledby="week-title">
+          <div class="week-card__heading">
+            <div><span class="mini-label">Posledných 7 dní</span><h2 id="week-title">Malé kroky sa počítajú</h2></div>
+            <strong id="week-score">0</strong>
+          </div>
+          <div class="week-days" id="week-days" aria-label="Aktivita za posledných sedem dní"></div>
+          <div class="stat-row">
+            <div><strong id="meal-stat">0</strong><span>jedál</span></div>
+            <div><strong id="kept-stat">0</strong><span>vydržala</span></div>
+            <div><strong id="treat-stat">0</strong><span>dala si</span></div>
+          </div>
+        </section>
+
+        <section aria-labelledby="timeline-title">
+          <div class="section-heading"><h2 id="timeline-title">Časová os</h2><span id="timeline-count">0 udalostí</span></div>
+          <div class="timeline" id="timeline" aria-live="polite"></div>
+        </section>
+      </section>
+
+      <section class="view" data-view="settings" aria-labelledby="settings-title" hidden>
+        <header class="page-header">
+          <div>
+            <p class="eyebrow">Aby bola naozaj tvoja</p>
+            <h1 id="settings-title" tabindex="-1">Nastavenia</h1>
+          </div>
+        </header>
+
+        <section class="settings-card install-card" aria-labelledby="install-title">
+          <div class="settings-icon settings-icon--berry" aria-hidden="true">⌂</div>
+          <div class="settings-copy">
+            <h2 id="install-title">Pridať na plochu iPhonu</h2>
+            <p id="install-copy">V Safari ťukni na Zdieľať a potom na „Pridať na plochu“. Appka potom funguje aj offline.</p>
+            <span class="status-chip" id="install-status">Ešte nie je nainštalovaná</span>
+          </div>
+        </section>
+
+        <section class="settings-card" aria-labelledby="reminders-title">
+          <div class="settings-card__top">
+            <div class="settings-icon settings-icon--gold" aria-hidden="true">◷</div>
+            <div class="settings-copy"><h2 id="reminders-title">Denné pripomienky</h2><p>Vyber tri chvíle, keď sa chceš krátko ozvať sama sebe.</p></div>
+          </div>
+          <div class="time-grid">
+            <label>Ráno<input id="reminder-1" type="time" value="10:00" /></label>
+            <label>Popoludní<input id="reminder-2" type="time" value="15:00" /></label>
+            <label>Večer<input id="reminder-3" type="time" value="20:00" /></label>
+          </div>
+          <button class="primary-button" id="calendar-button" type="button">Pripraviť offline pripomienky</button>
+          <button class="text-button" id="shortcut-help-button" type="button">Ako ich nastaviť cez Skratky</button>
+          <p class="fine-print">Časy sa ukladajú iba v tomto zariadení. Kalendárne upozornenia nepotrebujú internet.</p>
+        </section>
+
+        <section class="settings-card data-card" aria-labelledby="data-title">
+          <div class="settings-card__top">
+            <div class="settings-icon settings-icon--teal" aria-hidden="true">●</div>
+            <div class="settings-copy"><h2 id="data-title">Súkromie</h2><p>Fotky a odpovede sa ukladajú iba v tomto iPhone. Appka nemá účet ani vlastný cloud.</p></div>
+          </div>
+          <p class="fine-print">Ak vymažeš appku alebo dáta Safari, zmažú sa aj záznamy.</p>
+          <button class="danger-button" id="clear-data-button" type="button">Vymazať všetky záznamy</button>
+        </section>
+      </section>
+
+      <nav class="bottom-nav" aria-label="Hlavná navigácia">
+        <button class="nav-item is-active" type="button" data-go="today" aria-current="page">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 10 8-6 8 6v9a1 1 0 0 1-1 1h-5v-6h-4v6H5a1 1 0 0 1-1-1v-9Z"/></svg><span>Dnes</span>
+        </button>
+        <button class="nav-item" type="button" data-go="gallery">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg><span>Galéria</span>
+        </button>
+        <button class="nav-item" type="button" data-go="overview">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V9m6 10V5m6 14v-7m4 7V3"/></svg><span>Prehľad</span>
+        </button>
+        <button class="nav-item" type="button" data-go="settings">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6 1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></svg><span>Nastavenia</span>
+        </button>
+      </nav>
+    </main>
+
+    <dialog class="sheet" id="meal-dialog" aria-labelledby="meal-dialog-title">
+      <form method="dialog" id="meal-form">
+        <div class="sheet-handle" aria-hidden="true"></div>
+        <div class="dialog-head"><div><p class="eyebrow">Nový záznam</p><h2 id="meal-dialog-title">Pridať jedlo</h2></div><button class="icon-button" type="button" data-close="meal-dialog" aria-label="Zavrieť">×</button></div>
+        <img class="meal-preview" id="meal-preview" alt="Náhľad odfoteného jedla" />
+        <div class="form-grid">
+          <label>Čo to bolo?<input id="meal-name" name="name" type="text" maxlength="70" placeholder="Napríklad raňajky" /></label>
+          <label>Množstvo<input id="meal-amount" name="amount" type="text" maxlength="70" placeholder="Napríklad jeden tanier" /></label>
+          <label class="full-field">Poznámka <span>(nepovinné)</span><textarea id="meal-note" name="note" rows="2" maxlength="240" placeholder="Chuť, nálada alebo čokoľvek dôležité"></textarea></label>
+        </div>
+        <div class="timestamp-row"><span aria-hidden="true">◷</span><span id="meal-timestamp">Teraz</span></div>
+        <button class="primary-button" type="submit">Uložiť do denníka</button>
+      </form>
+    </dialog>
+
+    <dialog class="sheet" id="treat-dialog" aria-labelledby="treat-dialog-title">
+      <form method="dialog" id="treat-form">
+        <div class="sheet-handle" aria-hidden="true"></div>
+        <div class="dialog-head"><div><p class="eyebrow">Bez výčitiek</p><h2 id="treat-dialog-title">Čo si si dala?</h2></div><button class="icon-button" type="button" data-close="treat-dialog" aria-label="Zavrieť">×</button></div>
+        <p class="dialog-intro">Krátky záznam pomôže vidieť súvislosti. Nie je to známka ani trest.</p>
+        <div class="form-grid">
+          <label class="full-field">Čo to bolo?<input id="treat-name" name="name" type="text" required maxlength="90" placeholder="Napríklad dva kúsky čokolády" /></label>
+          <label class="full-field">Koľko? <span>(nepovinné)</span><input id="treat-amount" name="amount" type="text" maxlength="70" placeholder="Napríklad 40 g" /></label>
+        </div>
+        <button class="primary-button" type="submit">Zapísať úprimne a ísť ďalej</button>
+      </form>
+    </dialog>
+
+    <dialog class="sheet" id="entry-dialog" aria-labelledby="entry-dialog-title">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="dialog-head"><div><p class="eyebrow" id="entry-kind">Záznam</p><h2 id="entry-dialog-title">Detail</h2></div><button class="icon-button" type="button" data-close="entry-dialog" aria-label="Zavrieť">×</button></div>
+      <div id="entry-detail"></div>
+      <button class="danger-button danger-button--full" id="delete-entry-button" type="button">Vymazať tento záznam</button>
+    </dialog>
+
+    <dialog class="sheet" id="reminder-dialog" aria-labelledby="reminder-dialog-title">
+      <div class="sheet-handle" aria-hidden="true"></div>
+      <div class="dialog-head"><div><p class="eyebrow">iPhone bez App Storu</p><h2 id="reminder-dialog-title">Offline pripomienky</h2></div><button class="icon-button" type="button" data-close="reminder-dialog" aria-label="Zavrieť">×</button></div>
+      <div class="step-list">
+        <div><span>1</span><p><strong>Najjednoduchšie:</strong> otvor stiahnutý súbor a pridaj tri opakované udalosti do Kalendára.</p></div>
+        <div><span>2</span><p>Ak chceš použiť Skratky, vytvor automatizáciu <strong>Čas dňa</strong> pre každý uložený čas.</p></div>
+        <div><span>3</span><p>Pridaj akciu <strong>Zobraziť upozornenie</strong> s textom „Ako to ide so sladkým?“ a zapni okamžité spustenie.</p></div>
+      </div>
+      <p class="dialog-intro">Kalendár aj Skratky upozornia bez internetu. Odpoveď potom zapíšeš jedným ťuknutím v tejto appke.</p>
+      <button class="primary-button" type="button" data-close="reminder-dialog">Rozumiem</button>
+    </dialog>
+
+    <dialog class="confirm-dialog" id="clear-dialog" aria-labelledby="clear-title">
+      <h2 id="clear-title">Naozaj vymazať všetko?</h2>
+      <p>Fotky ani odpovede nebude možné obnoviť.</p>
+      <div class="confirm-actions"><button type="button" class="secondary-button" data-close="clear-dialog">Nechať údaje</button><button type="button" class="danger-button" id="confirm-clear-button">Vymazať</button></div>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+    <script src="./app.js?v=6" defer></script>
+  </body>
+</html>
