@@ -1,8 +1,8 @@
 {
-  "name": "Môj tanier",
-  "short_name": "Môj tanier",
-  "description": "Súkromný offline denník jedla a malých každodenných víťazstiev.",
-  "lang": "sk",
+  "name": "Můj talíř",
+  "short_name": "Můj talíř",
+  "description": "Malý soukromý deník jídla pro moji berušku.",
+  "lang": "cs",
   "id": "./",
   "start_url": "./",
   "scope": "./",

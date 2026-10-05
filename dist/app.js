@@ -116,17 +116,17 @@ function isToday(value) {
 }
 
 function formatTime(value) {
-  return new Intl.DateTimeFormat("sk-SK", { hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+  return new Intl.DateTimeFormat("cs-CZ", { hour: "2-digit", minute: "2-digit" }).format(new Date(value));
 }
 
 function formatDate(value, includeYear = false) {
-  return new Intl.DateTimeFormat("sk-SK", {
+  return new Intl.DateTimeFormat("cs-CZ", {
     weekday: "long", day: "numeric", month: "long", ...(includeYear ? { year: "numeric" } : {}),
   }).format(new Date(value));
 }
 
 function formatDateTime(value) {
-  return new Intl.DateTimeFormat("sk-SK", {
+  return new Intl.DateTimeFormat("cs-CZ", {
     day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit",
   }).format(new Date(value));
 }
@@ -186,19 +186,19 @@ function showView(name) {
 
 function mealRow(meal) {
   const photoUrl = makeObjectUrl(meal.photo);
-  const subtitle = [meal.amount, meal.note].filter(Boolean).join(" · ") || "Fotka jedla";
+  const subtitle = [meal.amount, meal.note].filter(Boolean).join(" · ") || "Fotka jídla";
   return `
     <button class="entry-row" type="button" data-entry-kind="meals" data-entry-id="${escapeHtml(meal.id)}">
       <img src="${photoUrl}" alt="" />
-      <span class="entry-row__copy"><strong>${escapeHtml(meal.name || "Jedlo")}</strong><small>${escapeHtml(subtitle)}</small></span>
+      <span class="entry-row__copy"><strong>${escapeHtml(meal.name || "Jídlo")}</strong><small>${escapeHtml(subtitle)}</small></span>
       <time datetime="${escapeHtml(meal.createdAt)}">${formatTime(meal.createdAt)}</time>
     </button>`;
 }
 
 function checkinRow(checkin) {
   const kept = checkin.status === "kept";
-  const title = kept ? "Vydržala som" : checkin.name || "Dala som si sladké";
-  const subtitle = kept ? "Malý úspech zaznamenaný" : checkin.amount || "Bez uvedeného množstva";
+  const title = kept ? "Zvládla jsem to" : checkin.name || "Dala jsem si něco sladkého";
+  const subtitle = kept ? "Mám z tebe radost" : checkin.amount || "Množství jsi nenapsala";
   return `
     <button class="entry-row" type="button" data-entry-kind="checkins" data-entry-id="${escapeHtml(checkin.id)}">
       <span class="entry-row__icon ${kept ? "" : "is-treat"}" aria-hidden="true">${kept ? "✓" : "♡"}</span>
@@ -210,7 +210,7 @@ function checkinRow(checkin) {
 function renderToday() {
   const now = new Date();
   const hour = now.getHours();
-  $("#today-title").textContent = hour < 11 ? "Dobré ráno." : hour < 18 ? "Ahoj, krásny deň." : "Pekný večer.";
+  $("#today-title").textContent = hour < 11 ? "Dobré ráno, šiško." : hour < 18 ? "Ahoj, beruško." : "Hezký večer, šiško.";
   $("#today-date").textContent = formatDate(now);
 
   const entries = [
@@ -218,15 +218,15 @@ function renderToday() {
     ...state.checkins.filter((item) => isToday(item.createdAt)).map((item) => ({ ...item, kind: "checkins" })),
   ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-  $("#today-count").textContent = countLabel(entries.length, "záznam", "záznamy", "záznamov");
+  $("#today-count").textContent = countLabel(entries.length, "záznam", "záznamy", "záznamů");
   const todayCheckins = state.checkins.filter((item) => isToday(item.createdAt));
   $("#checkin-note").textContent = todayCheckins.length
-    ? `Dnes už máš ${countLabel(todayCheckins.length, "check-in", "check-iny", "check-inov")}. Pokojne pridaj ďalší.`
-    : "Bez výčitiek. Len si zaznač, ako sa dnes máš.";
+    ? `Dnes už tu máš ${countLabel(todayCheckins.length, "odpověď", "odpovědi", "odpovědí")}. Klidně přidej další.`
+    : "Ať je odpověď jakákoli, jsem s tebou.";
 
   $("#today-items").innerHTML = entries.length
     ? entries.map((entry) => entry.kind === "meals" ? mealRow(entry) : checkinRow(entry)).join("")
-    : `<div class="empty-mini"><span class="empty-mini__icon" aria-hidden="true">＋</span><p>Prvá fotka alebo odpoveď dňa sa objaví práve tu.</p></div>`;
+    : `<div class="empty-mini"><span class="empty-mini__icon" aria-hidden="true">＋</span><p>První fotka nebo odpověď se objeví právě tady.</p></div>`;
 }
 
 function renderGallery() {
@@ -239,8 +239,8 @@ function renderGallery() {
     const photoUrl = makeObjectUrl(meal.photo);
     return `
       <button class="gallery-card" type="button" data-entry-kind="meals" data-entry-id="${escapeHtml(meal.id)}">
-        <img src="${photoUrl}" alt="${escapeHtml(meal.name || "Fotka jedla")}" loading="lazy" />
-        <span class="gallery-card__copy"><strong>${escapeHtml(meal.name || "Jedlo")}</strong><time datetime="${escapeHtml(meal.createdAt)}">${escapeHtml(formatDate(meal.createdAt))} · ${formatTime(meal.createdAt)}</time></span>
+        <img src="${photoUrl}" alt="${escapeHtml(meal.name || "Fotka jídla")}" loading="lazy" />
+        <span class="gallery-card__copy"><strong>${escapeHtml(meal.name || "Jídlo")}</strong><time datetime="${escapeHtml(meal.createdAt)}">${escapeHtml(formatDate(meal.createdAt))} · ${formatTime(meal.createdAt)}</time></span>
       </button>`;
   }).join("");
 }
@@ -270,7 +270,7 @@ function renderOverview() {
     const hasKept = dayCheckins.some((item) => item.status === "kept");
     const stateClass = hasTreat ? "has-treat" : hasKept ? "has-kept" : dayMeals.length ? "has-meal" : "";
     const symbol = hasTreat ? "♡" : hasKept ? "✓" : dayMeals.length ? "•" : "·";
-    const label = new Intl.DateTimeFormat("sk-SK", { weekday: "short" }).format(date).replace(".", "");
+    const label = new Intl.DateTimeFormat("cs-CZ", { weekday: "short" }).format(date).replace(".", "");
     return `<span class="day-dot ${stateClass}" title="${escapeHtml(formatDate(date))}"><i>${symbol}</i>${escapeHtml(label)}</span>`;
   });
   $("#week-days").innerHTML = days.join("");
@@ -280,16 +280,16 @@ function renderOverview() {
     ...state.checkins.map((item) => ({ ...item, kind: "checkins" })),
   ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-  $("#timeline-count").textContent = countLabel(events.length, "udalosť", "udalosti", "udalostí");
+  $("#timeline-count").textContent = countLabel(events.length, "událost", "události", "událostí");
   $("#timeline").innerHTML = events.length ? events.map((event) => {
     const isMeal = event.kind === "meals";
     const isTreat = event.status === "treat";
-    const title = isMeal ? event.name || "Jedlo" : isTreat ? event.name || "Dala som si sladké" : "Vydržala som";
+    const title = isMeal ? event.name || "Jídlo" : isTreat ? event.name || "Dala jsem si něco sladkého" : "Zvládla jsem to";
     const detail = [formatDate(event.createdAt), formatTime(event.createdAt), event.amount].filter(Boolean).join(" · ");
     const iconClass = isMeal ? "is-meal" : isTreat ? "is-treat" : "";
     const icon = isMeal ? "●" : isTreat ? "♡" : "✓";
     return `<button class="timeline-item" type="button" data-entry-kind="${event.kind}" data-entry-id="${escapeHtml(event.id)}"><span class="timeline-dot ${iconClass}">${icon}</span><span class="timeline-copy"><strong>${escapeHtml(title)}</strong><p>${escapeHtml(detail)}</p></span></button>`;
-  }).join("") : `<div class="empty-mini"><span class="empty-mini__icon" aria-hidden="true">◔</span><p>Tvoj prehľad sa vytvorí z prvých záznamov.</p></div>`;
+  }).join("") : `<div class="empty-mini"><span class="empty-mini__icon" aria-hidden="true">◔</span><p>Tvůj přehled se vytvoří z prvních záznamů.</p></div>`;
 }
 
 function renderSettings() {
@@ -298,11 +298,11 @@ function renderSettings() {
     if (input) input.value = value;
   });
   const installed = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
-  $("#install-status").textContent = installed ? "Nainštalovaná na ploche" : "Ešte nie je nainštalovaná";
+  $("#install-status").textContent = installed ? "Nainstalovaná na ploše" : "Ještě není nainstalovaná";
   $("#install-status").classList.toggle("is-installed", installed);
   $("#install-copy").textContent = installed
-    ? "Hotovo. Môj tanier sa otvára ako samostatná appka a pripravené údaje fungujú aj offline."
-    : "V Safari ťukni na Zdieľať a potom na „Pridať na plochu“. Appka potom funguje aj offline.";
+    ? "Hotovo. Můj talíř se otevírá jako samostatná appka a uložené věci fungují i offline."
+    : "V Safari klepni na Sdílet a potom na „Přidat na plochu“. Appka pak funguje i offline.";
 }
 
 function renderAll() {
@@ -319,7 +319,7 @@ async function refreshData() {
 }
 
 async function compressPhoto(file) {
-  if (!file?.type?.startsWith("image/")) throw new Error("Vybraný súbor nie je fotografia.");
+  if (!file?.type?.startsWith("image/")) throw new Error("Vybraný soubor není fotka.");
   const sourceUrl = URL.createObjectURL(file);
   try {
     const image = new Image();
@@ -345,7 +345,7 @@ async function compressPhoto(file) {
 
 async function stagePhoto(file) {
   try {
-    toast("Pripravujem fotku…");
+    toast("Chvilku, upravuju fotku…");
     state.pendingPhoto = await compressPhoto(file);
     state.pendingPhotoTime = new Date().toISOString();
     if (state.pendingPhotoUrl) URL.revokeObjectURL(state.pendingPhotoUrl);
@@ -356,7 +356,7 @@ async function stagePhoto(file) {
     openDialog("meal-dialog");
   } catch (error) {
     console.error(error);
-    toast("Fotku sa nepodarilo načítať. Skús inú.");
+    toast("Fotku se nepodařilo načíst. Zkus prosím jinou.");
   }
 }
 
@@ -379,7 +379,7 @@ async function saveMeal(event) {
       await putOne(STORES.meals, meal);
     } catch (error) {
       console.error(error);
-      toast("Jedlo sa nepodarilo uložiť. Fotku ešte nechávam otvorenú.");
+      toast("Jídlo se nepodařilo uložit. Fotku zatím nechávám otevřenou.");
       return;
     }
     closeDialog("meal-dialog");
@@ -393,7 +393,7 @@ async function saveMeal(event) {
       console.error(error);
       try { await refreshData(); } catch (refreshError) { console.error(refreshError); }
     }
-    toast("Jedlo je uložené offline.");
+    toast("Hotovo, beruško. Jídlo je uložené i offline.");
   } finally {
     state.savingMeal = false;
     submitButton.disabled = false;
@@ -401,7 +401,7 @@ async function saveMeal(event) {
 }
 
 async function saveCheckin(checkin) {
-  if (state.savingCheckin) throw new Error("Ukladanie už prebieha.");
+  if (state.savingCheckin) throw new Error("Ukládání už probíhá.");
   state.savingCheckin = true;
   const controls = [$("#kept-button"), $("#treat-button"), $("#treat-form [type='submit']")].filter(Boolean);
   controls.forEach((control) => { control.disabled = true; });
@@ -430,14 +430,14 @@ async function openEntry(kind, id) {
   state.selected = { kind, id };
   const isMeal = kind === STORES.meals;
   const isTreat = record.status === "treat";
-  $("#entry-kind").textContent = isMeal ? "Jedlo" : "Check-in";
-  $("#entry-dialog-title").textContent = isMeal ? record.name || "Jedlo" : isTreat ? record.name || "Dala som si sladké" : "Vydržala som";
-  const photo = isMeal ? `<img class="detail-photo" src="${makeObjectUrl(record.photo)}" alt="${escapeHtml(record.name || "Fotka jedla")}" />` : "";
+  $("#entry-kind").textContent = isMeal ? "Jídlo" : "Odpověď";
+  $("#entry-dialog-title").textContent = isMeal ? record.name || "Jídlo" : isTreat ? record.name || "Dala jsem si něco sladkého" : "Zvládla jsem to";
+  const photo = isMeal ? `<img class="detail-photo" src="${makeObjectUrl(record.photo)}" alt="${escapeHtml(record.name || "Fotka jídla")}" />` : "";
   const lines = [
-    `<p><strong>Kedy:</strong> ${escapeHtml(formatDateTime(record.createdAt))}</p>`,
-    record.amount ? `<p><strong>Množstvo:</strong> ${escapeHtml(record.amount)}</p>` : "",
+    `<p><strong>Kdy:</strong> ${escapeHtml(formatDateTime(record.createdAt))}</p>`,
+    record.amount ? `<p><strong>Množství:</strong> ${escapeHtml(record.amount)}</p>` : "",
     record.note ? `<p><strong>Poznámka:</strong> ${escapeHtml(record.note)}</p>` : "",
-    !isMeal && !isTreat ? `<p>Malý úspech je bezpečne zaznamenaný.</p>` : "",
+    !isMeal && !isTreat ? `<p>Mám z tebe radost. Tenhle malý úspěch je uložený.</p>` : "",
   ].filter(Boolean).join("");
   $("#entry-detail").innerHTML = `${photo}<div class="detail-meta">${lines}</div>`;
   openDialog("entry-dialog");
@@ -463,7 +463,7 @@ async function saveReminderSettings() {
     putOne(STORES.settings, { key: "reminders", value: state.reminders }),
     putOne(STORES.settings, { key: "reminderSequence", value: state.reminderSequence }),
   ]);
-  toast("Časy sú uložené.");
+  toast("Časy jsou uložené.");
 }
 
 function icsDate(date, time) {
@@ -494,28 +494,28 @@ function downloadCalendar() {
     `DTSTART:${icsDate(nextOccurrence(time), time)}`,
     `SEQUENCE:${state.reminderSequence}`,
     "RRULE:FREQ=DAILY",
-    "SUMMARY:Ako to ide so sladkým?",
-    "DESCRIPTION:Bez výčitiek. Otvor Môj tanier a sprav si krátky check-in.",
+    "SUMMARY:Jak to dneska jde se sladkým?",
+    "DESCRIPTION:Jen malá připomínka ode mě. Otevři Můj talíř a napiš si krátkou odpověď.",
     `URL:${appUrl}`,
     "BEGIN:VALARM",
     "TRIGGER:PT0S",
     "ACTION:DISPLAY",
-    "DESCRIPTION:Ako to ide so sladkým?",
+    "DESCRIPTION:Jak to dneska jde se sladkým?",
     "END:VALARM",
     "END:VEVENT",
   ].join("\r\n")).join("\r\n");
-  const content = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Moj tanier//Offline reminders//SK", "CALSCALE:GREGORIAN", events, "END:VCALENDAR"].join("\r\n");
+  const content = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Muj talir//Offline reminders//CS", "CALSCALE:GREGORIAN", events, "END:VCALENDAR"].join("\r\n");
   const blob = new Blob([content], { type: "text/calendar;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "moj-tanier-pripomienky.ics";
+  link.download = "muj-talir-pripomenuti.ics";
   document.body.append(link);
   link.click();
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1500);
   openDialog("reminder-dialog");
-  toast("Pripomienky sú pripravené.");
+  toast("Připomenutí jsou připravená.");
 }
 
 function updateConnectivity() {
@@ -549,10 +549,10 @@ function bindEvents() {
   $("#kept-button").addEventListener("click", async () => {
     try {
       await saveCheckin({ status: "kept" });
-      toast("Zapísané. Toto je tvoje malé víťazstvo.");
+      toast("Zapsáno. Jsem na tebe pyšnej, beruško.");
     } catch (error) {
       console.error(error);
-      toast("Odpoveď sa nepodarilo uložiť.");
+      toast("Odpověď se nepodařilo uložit.");
     }
   });
   $("#treat-button").addEventListener("click", () => openDialog("treat-dialog"));
@@ -563,10 +563,10 @@ function bindEvents() {
       await saveCheckin({ status: "treat", name: $("#treat-name").value.trim(), amount: $("#treat-amount").value.trim() });
       form.reset();
       closeDialog("treat-dialog");
-      toast("Zapísané. Jeden moment neurčuje celý deň.");
+      toast("Zapsáno. Jedna sladkost nic nemění, šiško.");
     } catch (error) {
       console.error(error);
-      toast("Odpoveď sa nepodarilo uložiť.");
+      toast("Odpověď se nepodařilo uložit.");
     }
   });
 
@@ -576,7 +576,7 @@ function bindEvents() {
     state.selected = null;
     closeDialog("entry-dialog");
     await refreshData();
-    toast("Záznam je vymazaný.");
+    toast("Záznam je smazaný.");
   });
 
   [1, 2, 3].forEach((index) => document.getElementById(`reminder-${index}`).addEventListener("change", saveReminderSettings));
@@ -587,7 +587,7 @@ function bindEvents() {
     await clearJournal();
     closeDialog("clear-dialog");
     await refreshData();
-    toast("Denník je prázdny.");
+    toast("Deník je teď prázdný.");
   });
 
   window.addEventListener("online", updateConnectivity);
@@ -602,8 +602,8 @@ function registerWebMcpTools() {
   };
   register({
     name: "record_food_check_in",
-    title: "Zapísať check-in",
-    description: "Zapíše dnešnú odpoveď, či používateľka vydržala bez sladkého alebo si niečo dala, a obnoví viditeľný denník.",
+    title: "Zapsat dnešní odpověď",
+    description: "Zapíše dnešní odpověď, jestli uživatelka zvládla den bez sladkého, nebo si něco dala, a obnoví viditelný deník.",
     inputSchema: {
       type: "object",
       properties: {
@@ -616,8 +616,8 @@ function registerWebMcpTools() {
     },
     annotations: { readOnlyHint: false, untrustedContentHint: false },
     async execute(input) {
-      if (!input || !["kept", "treat"].includes(input.status)) throw new Error("status musí byť kept alebo treat");
-      if (input.status === "treat" && !String(input.name || "").trim()) throw new Error("Pri treat je potrebné uviesť, čo si používateľka dala");
+      if (!input || !["kept", "treat"].includes(input.status)) throw new Error("Status musí být kept nebo treat.");
+      if (input.status === "treat" && !String(input.name || "").trim()) throw new Error("U treat je potřeba uvést, co si uživatelka dala.");
       const record = { status: input.status, name: String(input.name || "").slice(0, 90), amount: String(input.amount || "").slice(0, 70) };
       await saveCheckin(record);
       return { saved: true, status: record.status, createdAt: new Date().toISOString() };
@@ -625,8 +625,8 @@ function registerWebMcpTools() {
   });
   register({
     name: "read_today_food_diary",
-    title: "Prečítať dnešný denník",
-    description: "Vráti stručné počty dnešných jedál a check-inov bez fotografií.",
+    title: "Přečíst dnešní deník",
+    description: "Vrátí stručné počty dnešních jídel a odpovědí bez fotografií.",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
     annotations: { readOnlyHint: true, untrustedContentHint: false },
     execute() {
@@ -645,7 +645,7 @@ async function init() {
     await refreshData();
   } catch (error) {
     console.error(error);
-    toast("Denník sa nepodarilo otvoriť. Skús stránku načítať znova.");
+    toast("Deník se nepodařilo otevřít. Zkus stránku načíst znovu.");
   }
   registerWebMcpTools();
   if ("serviceWorker" in navigator) {
