@@ -33,9 +33,9 @@ body {
 }
 
 body:has(dialog[open]) { overflow: hidden; }
-button, input, textarea { font: inherit; }
+button, input, textarea, select { font: inherit; }
 button, label[for] { cursor: pointer; }
-button:focus-visible, input:focus-visible, textarea:focus-visible, label[for]:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, label[for]:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
 button:disabled { cursor: wait; opacity: .66; }
 img { max-width: 100%; display: block; }
 
@@ -125,6 +125,16 @@ h2 { margin-bottom: 0; font-size: 1.18rem; line-height: 1.2; letter-spacing: -.0
 
 .mini-label { color: #ffcfda; }
 .checkin-actions { gap: 10px; }
+.checkin-card [hidden] { display: none !important; }
+.checkin-response h2 { margin-top: 9px; font-size: 1.3rem; line-height: 1.4; overflow-wrap: anywhere; }
+.checkin-answer { margin: 14px 0; color: #dfcadb; font-size: .8rem; line-height: 1.5; overflow-wrap: anywhere; }
+.checkin-next { display: flex; align-items: center; gap: 10px; padding: 13px; border-radius: 15px; background: #4a1b43; }
+.checkin-next > span { color: var(--gold); font-size: 1.5rem; }
+.checkin-next p { margin: 0; font-size: .91rem; line-height: 1.5; font-weight: 750; }
+.checkin-wait-note { margin: 12px 0; color: #dfcadb; font-size: .82rem; line-height: 1.5; }
+.checkin-detail-button { min-height: 44px; padding: 8px 0; border: 0; background: transparent; color: #ffcfda; text-decoration: underline; text-underline-offset: 3px; font-size: .82rem; }
+.interval-setting { display: grid; gap: 8px; margin-top: 18px; font-size: .85rem; font-weight: 750; }
+.interval-setting select { width: 100%; min-height: 48px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 13px; background: var(--cream); color: var(--ink); font-size: 1rem; }
 
 .choice {
   min-height: 50px;
@@ -143,7 +153,7 @@ h2 { margin-bottom: 0; font-size: 1.18rem; line-height: 1.2; letter-spacing: -.0
 
 .choice:hover { filter: brightness(1.08); }
 .choice:active { transform: scale(.97); }
-.choice svg { width: 18px; height: 18px; margin-right: 6px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.choice svg { width: 18px; height: 18px; flex-shrink: 0; margin-right: 6px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .choice--good { background: var(--teal); }
 .choice--treat { background: var(--raspberry-deep); }
 

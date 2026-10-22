@@ -1,10 +1,19 @@
 const DB_NAME = "moj-tanier-db";
 const DB_VERSION = 1;
 const STORES = { meals: "meals", checkins: "checkins", settings: "settings" };
+const CHECKIN_INTERVALS = [1, 2, 3, 4, 6, 8, 12, 24];
+const KEPT_MESSAGES = [
+  "Tak to jsi moc šikovná, beruško. Jsem na tebe pyšný. 🤍",
+  "Hmmm, dneska jsi nezlobila, jo? Tomu se těžce věří. 😏",
+  "Jen do toho! Dej tomu cukru co proto, ty šiško. 💪",
+];
+const TREAT_MESSAGE = "Zapsáno. Jedna sladkost nic nemění, šiško. 🤍";
 
 const state = {
   meals: [],
   checkins: [],
+  checkinsReady: false,
+  checkinIntervalHours: 6,
   reminders: ["10:00", "15:00", "20:00"],
   calendarId: null,
   reminderSequence: 0,
@@ -43,6 +52,7 @@ function openDatabase() {
 }
 
 const dbPromise = openDatabase();
+const journalChannel = typeof BroadcastChannel === "function" ? new BroadcastChannel("moj-tanier-updates") : null;
 
 async function getAll(storeName) {
   const db = await dbPromise;
@@ -137,6 +147,131 @@ function countLabel(count, singular, few, many) {
   return `${count} ${many}`;
 }
 
+function normalizeCheckinInterval(value) {
+  return CHECKIN_INTERVALS.includes(value) ? value : 6;
+}
+
+function latestCheckin(records) {
+  return records.reduce((latest, record) => {
+    if (!["kept", "treat"].includes(record.status) || !Number.isFinite(Date.parse(record.createdAt))) return latest;
+    return !latest || Date.parse(record.createdAt) > Date.parse(latest.createdAt) ? record : latest;
+  }, null);
+}
+
+function checkinCycle(records, intervalHours, now = Date.now()) {
+  const latest = latestCheckin(records);
+  const nextAt = latest ? Date.parse(latest.createdAt) + normalizeCheckinInterval(intervalHours) * 60 * 60 * 1000 : null;
+  return { latest, nextAt, waiting: nextAt !== null && now < nextAt };
+}
+
+function checkinMessage(record) {
+  return record.status === "treat" ? TREAT_MESSAGE : record.feedbackMessage || KEPT_MESSAGES[0];
+}
+
+function chooseKeptMessage(records, random = Math.random) {
+  const previous = latestCheckin(records.filter((record) => record.status === "kept"));
+  const candidates = KEPT_MESSAGES.filter((message) => message !== (previous && checkinMessage(previous)));
+  return candidates[Math.min(candidates.length - 1, Math.floor(random() * candidates.length))] || KEPT_MESSAGES[0];
+}
+
+function nextQuestionText(nextAt, now = Date.now()) {
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const day = localDayKey(nextAt) === localDayKey(now) ? "dnes"
+    : localDayKey(nextAt) === localDayKey(tomorrow) ? "zítra"
+    : `dne ${new Intl.DateTimeFormat("cs-CZ", { day: "numeric", month: "long" }).format(new Date(nextAt))}`;
+  return `Zase se tě zeptám ${day} v ${formatTime(nextAt)}.`;
+}
+
+function renderCheckin() {
+  clearTimeout(renderCheckin.timer);
+  const now = Date.now();
+  const cycle = checkinCycle(state.checkins, state.checkinIntervalHours, now);
+  const waiting = state.checkinsReady && cycle.waiting;
+  $("#checkin-prompt").hidden = waiting;
+  $("#checkin-response").hidden = !waiting;
+  $("#checkin-card").classList.toggle("is-waiting", waiting);
+  $("#kept-button").disabled = $("#treat-button").disabled = !state.checkinsReady || state.savingCheckin || waiting;
+  if (waiting) {
+    const record = cycle.latest;
+    $("#checkin-message").textContent = checkinMessage(record);
+    const answer = record.status === "kept" ? "Nic sladkého" : [record.name || "Něco sladkého", record.amount].filter(Boolean).join(" · ");
+    $("#checkin-answer").textContent = `${answer} · ${formatDateTime(record.createdAt)}`;
+    $("#checkin-next").textContent = nextQuestionText(cycle.nextAt, now);
+  } else {
+    $("#checkin-title").textContent = cycle.latest ? "Dala sis od minula něco sladkého?" : "Tak co, šiško, dala sis něco sladkého?";
+    $("#checkin-note").textContent = state.checkinsReady
+      ? "Ať je odpověď jakákoli, jsem s tebou."
+      : "Chvilku, otevírám tvůj deník…";
+  }
+  if (state.checkinsReady) {
+    const midnight = new Date(now);
+    midnight.setHours(24, 0, 0, 0);
+    const delay = Math.max(50, Math.min(60000, midnight.getTime() - now + 30, waiting ? cycle.nextAt - now + 30 : 60000));
+    renderCheckin.timer = setTimeout(() => {
+      if (state.renderedDay !== localDayKey(Date.now())) renderAll();
+      else renderCheckin();
+    }, delay);
+  }
+}
+
+// Reading the last answer and writing the next one share one transaction, even across tabs.
+async function commitCheckin(checkin) {
+  const db = await dbPromise;
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction([STORES.checkins, STORES.settings], "readwrite");
+    const store = tx.objectStore(STORES.checkins);
+    const recordsRequest = store.getAll();
+    const intervalRequest = tx.objectStore(STORES.settings).get("checkinIntervalHours");
+    let records;
+    let intervalLoaded = false;
+    let intervalHours;
+    let result;
+    const saveWhenReady = () => {
+      if (!records || !intervalLoaded) return;
+      const now = Date.now();
+      const cycle = checkinCycle(records, intervalHours, now);
+      if (cycle.waiting) {
+        result = { saved: false, record: cycle.latest, records, intervalHours, nextAt: cycle.nextAt };
+        return;
+      }
+      const record = {
+        id: uid(),
+        createdAt: new Date(now).toISOString(),
+        status: checkin.status,
+        name: checkin.name || "",
+        amount: checkin.amount || "",
+        feedbackMessage: checkin.status === "kept" ? chooseKeptMessage(records) : TREAT_MESSAGE,
+      };
+      store.add(record);
+      result = { saved: true, record, records: [...records, record], intervalHours, nextAt: now + intervalHours * 60 * 60 * 1000 };
+    };
+    recordsRequest.onsuccess = () => { records = recordsRequest.result || []; saveWhenReady(); };
+    intervalRequest.onsuccess = () => {
+      intervalHours = normalizeCheckinInterval(intervalRequest.result?.value);
+      intervalLoaded = true;
+      saveWhenReady();
+    };
+    tx.oncomplete = () => resolve(result);
+    tx.onabort = () => reject(tx.error || new Error("Odpověď se nepodařilo uložit."));
+    tx.onerror = () => reject(tx.error || new Error("Odpověď se nepodařilo uložit."));
+  });
+}
+
+async function syncJournal() {
+  if (!state.checkinsReady || document.hidden) return;
+  try {
+    await loadSettings();
+    await refreshData();
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+function announceJournalChange() {
+  journalChannel?.postMessage("changed");
+}
+
 function makeObjectUrl(blob) {
   const url = URL.createObjectURL(blob);
   state.objectUrls.push(url);
@@ -197,7 +332,7 @@ function mealRow(meal) {
 
 function checkinRow(checkin) {
   const kept = checkin.status === "kept";
-  const title = kept ? "Zvládla jsem to" : checkin.name || "Dala jsem si něco sladkého";
+  const title = kept ? "Nic jsem si nedala" : checkin.name || "Dala jsem si něco sladkého";
   const subtitle = kept ? "Mám z tebe radost" : checkin.amount || "Množství jsi nenapsala";
   return `
     <button class="entry-row" type="button" data-entry-kind="checkins" data-entry-id="${escapeHtml(checkin.id)}">
@@ -209,6 +344,7 @@ function checkinRow(checkin) {
 
 function renderToday() {
   const now = new Date();
+  state.renderedDay = localDayKey(now);
   const hour = now.getHours();
   $("#today-title").textContent = hour < 11 ? "Dobré ráno, šiško." : hour < 18 ? "Ahoj, beruško." : "Hezký večer, šiško.";
   $("#today-date").textContent = formatDate(now);
@@ -219,10 +355,7 @@ function renderToday() {
   ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
   $("#today-count").textContent = countLabel(entries.length, "záznam", "záznamy", "záznamů");
-  const todayCheckins = state.checkins.filter((item) => isToday(item.createdAt));
-  $("#checkin-note").textContent = todayCheckins.length
-    ? `Dnes už tu máš ${countLabel(todayCheckins.length, "odpověď", "odpovědi", "odpovědí")}. Klidně přidej další.`
-    : "Ať je odpověď jakákoli, jsem s tebou.";
+  renderCheckin();
 
   $("#today-items").innerHTML = entries.length
     ? entries.map((entry) => entry.kind === "meals" ? mealRow(entry) : checkinRow(entry)).join("")
@@ -284,7 +417,7 @@ function renderOverview() {
   $("#timeline").innerHTML = events.length ? events.map((event) => {
     const isMeal = event.kind === "meals";
     const isTreat = event.status === "treat";
-    const title = isMeal ? event.name || "Jídlo" : isTreat ? event.name || "Dala jsem si něco sladkého" : "Zvládla jsem to";
+    const title = isMeal ? event.name || "Jídlo" : isTreat ? event.name || "Dala jsem si něco sladkého" : "Nic jsem si nedala";
     const detail = [formatDate(event.createdAt), formatTime(event.createdAt), event.amount].filter(Boolean).join(" · ");
     const iconClass = isMeal ? "is-meal" : isTreat ? "is-treat" : "";
     const icon = isMeal ? "●" : isTreat ? "♡" : "✓";
@@ -293,6 +426,8 @@ function renderOverview() {
 }
 
 function renderSettings() {
+  $("#checkin-interval").value = String(state.checkinIntervalHours);
+  $("#checkin-interval").disabled = !state.checkinsReady;
   state.reminders.forEach((value, index) => {
     const input = document.getElementById(`reminder-${index + 1}`);
     if (input) input.value = value;
@@ -387,6 +522,7 @@ async function saveMeal(event) {
     if (state.pendingPhotoUrl) URL.revokeObjectURL(state.pendingPhotoUrl);
     state.pendingPhotoUrl = null;
     state.meals.push(meal);
+    announceJournalChange();
     try {
       renderAll();
     } catch (error) {
@@ -401,24 +537,29 @@ async function saveMeal(event) {
 }
 
 async function saveCheckin(checkin) {
+  if (!state.checkinsReady) throw new Error("Deník ještě není načtený.");
+  if (!["kept", "treat"].includes(checkin.status)) throw new Error("Neplatná odpověď.");
+  if (checkin.status === "treat" && !String(checkin.name || "").trim()) throw new Error("Napiš prosím, co sis dala.");
   if (state.savingCheckin) throw new Error("Ukládání už probíhá.");
   state.savingCheckin = true;
   const controls = [$("#kept-button"), $("#treat-button"), $("#treat-form [type='submit']")].filter(Boolean);
   controls.forEach((control) => { control.disabled = true; });
-  const record = { id: uid(), createdAt: new Date().toISOString(), ...checkin };
   try {
-    await putOne(STORES.checkins, record);
-    state.checkins.push(record);
+    const result = await commitCheckin(checkin);
+    state.checkins = result.records;
+    state.checkinIntervalHours = result.intervalHours;
     try {
       renderAll();
     } catch (error) {
       console.error(error);
       try { await refreshData(); } catch (refreshError) { console.error(refreshError); }
     }
-    return record;
+    if (result.saved) announceJournalChange();
+    return result;
   } finally {
     state.savingCheckin = false;
     controls.forEach((control) => { control.disabled = false; });
+    renderCheckin();
   }
 }
 
@@ -431,28 +572,50 @@ async function openEntry(kind, id) {
   const isMeal = kind === STORES.meals;
   const isTreat = record.status === "treat";
   $("#entry-kind").textContent = isMeal ? "Jídlo" : "Odpověď";
-  $("#entry-dialog-title").textContent = isMeal ? record.name || "Jídlo" : isTreat ? record.name || "Dala jsem si něco sladkého" : "Zvládla jsem to";
+  $("#entry-dialog-title").textContent = isMeal ? record.name || "Jídlo" : isTreat ? record.name || "Dala jsem si něco sladkého" : "Nic jsem si nedala";
   const photo = isMeal ? `<img class="detail-photo" src="${makeObjectUrl(record.photo)}" alt="${escapeHtml(record.name || "Fotka jídla")}" />` : "";
   const lines = [
     `<p><strong>Kdy:</strong> ${escapeHtml(formatDateTime(record.createdAt))}</p>`,
     record.amount ? `<p><strong>Množství:</strong> ${escapeHtml(record.amount)}</p>` : "",
     record.note ? `<p><strong>Poznámka:</strong> ${escapeHtml(record.note)}</p>` : "",
-    !isMeal && !isTreat ? `<p>Mám z tebe radost. Tenhle malý úspěch je uložený.</p>` : "",
+    !isMeal ? `<p>${escapeHtml(checkinMessage(record))}</p>` : "",
   ].filter(Boolean).join("");
   $("#entry-detail").innerHTML = `${photo}<div class="detail-meta">${lines}</div>`;
   openDialog("entry-dialog");
 }
 
 async function loadSettings() {
-  const [reminders, calendarId, reminderSequence] = await Promise.all([
+  const [reminders, calendarId, reminderSequence, checkinInterval] = await Promise.all([
     getOne(STORES.settings, "reminders"),
     getOne(STORES.settings, "calendarId"),
     getOne(STORES.settings, "reminderSequence"),
+    getOne(STORES.settings, "checkinIntervalHours"),
   ]);
   if (Array.isArray(reminders?.value) && reminders.value.length === 3) state.reminders = reminders.value;
   state.calendarId = typeof calendarId?.value === "string" ? calendarId.value : uid();
   state.reminderSequence = Number.isInteger(reminderSequence?.value) ? Math.max(0, reminderSequence.value) : 0;
+  state.checkinIntervalHours = normalizeCheckinInterval(checkinInterval?.value);
   if (!calendarId?.value) await putOne(STORES.settings, { key: "calendarId", value: state.calendarId });
+}
+
+async function saveCheckinInterval() {
+  const input = $("#checkin-interval");
+  const value = Number(input.value);
+  if (!CHECKIN_INTERVALS.includes(value)) { input.value = String(state.checkinIntervalHours); return; }
+  input.disabled = true;
+  try {
+    await putOne(STORES.settings, { key: "checkinIntervalHours", value });
+    state.checkinIntervalHours = value;
+    renderCheckin();
+    announceJournalChange();
+    toast(`Pauza je nastavená na ${countLabel(value, "hodinu", "hodiny", "hodin")}.`);
+  } catch (error) {
+    console.error(error);
+    input.value = String(state.checkinIntervalHours);
+    toast("Interval se nepodařilo uložit. Zkus to prosím znovu.");
+  } finally {
+    input.disabled = false;
+  }
 }
 
 async function saveReminderSettings() {
@@ -548,27 +711,41 @@ function bindEvents() {
   $("#meal-form").addEventListener("submit", saveMeal);
   $("#kept-button").addEventListener("click", async () => {
     try {
-      await saveCheckin({ status: "kept" });
-      toast("Zapsáno. Jsem na tebe pyšnej, beruško.");
+      const result = await saveCheckin({ status: "kept" });
+      if (result.saved) $("#checkin-response").focus({ preventScroll: true });
+      else toast("Odpověď už máš uloženou. Další otázka přijde po pauze.");
     } catch (error) {
       console.error(error);
       toast("Odpověď se nepodařilo uložit.");
     }
   });
-  $("#treat-button").addEventListener("click", () => openDialog("treat-dialog"));
+  $("#treat-button").addEventListener("click", () => {
+    renderCheckin();
+    if (state.checkinsReady && !checkinCycle(state.checkins, state.checkinIntervalHours).waiting) openDialog("treat-dialog");
+  });
   $("#treat-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = event.currentTarget;
     try {
-      await saveCheckin({ status: "treat", name: $("#treat-name").value.trim(), amount: $("#treat-amount").value.trim() });
+      const result = await saveCheckin({ status: "treat", name: $("#treat-name").value.trim(), amount: $("#treat-amount").value.trim() });
+      if (!result.saved) {
+        toast(`Odpověď už máš uloženou. ${nextQuestionText(result.nextAt)}`);
+        return;
+      }
       form.reset();
       closeDialog("treat-dialog");
-      toast("Zapsáno. Jedna sladkost nic nemění, šiško.");
+      $("#checkin-response").focus({ preventScroll: true });
     } catch (error) {
       console.error(error);
       toast("Odpověď se nepodařilo uložit.");
     }
   });
+
+  $("#checkin-detail-button").addEventListener("click", () => {
+    const latest = latestCheckin(state.checkins);
+    if (latest) void openEntry(STORES.checkins, latest.id);
+  });
+  $("#checkin-interval").addEventListener("change", saveCheckinInterval);
 
   $("#delete-entry-button").addEventListener("click", async () => {
     if (!state.selected) return;
@@ -576,6 +753,7 @@ function bindEvents() {
     state.selected = null;
     closeDialog("entry-dialog");
     await refreshData();
+    announceJournalChange();
     toast("Záznam je smazaný.");
   });
 
@@ -587,11 +765,16 @@ function bindEvents() {
     await clearJournal();
     closeDialog("clear-dialog");
     await refreshData();
+    announceJournalChange();
     toast("Deník je teď prázdný.");
   });
 
   window.addEventListener("online", updateConnectivity);
   window.addEventListener("offline", updateConnectivity);
+  window.addEventListener("focus", syncJournal);
+  window.addEventListener("pageshow", syncJournal);
+  document.addEventListener("visibilitychange", syncJournal);
+  if (journalChannel) journalChannel.onmessage = syncJournal;
 }
 
 function registerWebMcpTools() {
@@ -603,7 +786,7 @@ function registerWebMcpTools() {
   register({
     name: "record_food_check_in",
     title: "Zapsat dnešní odpověď",
-    description: "Zapíše dnešní odpověď, jestli uživatelka zvládla den bez sladkého, nebo si něco dala, a obnoví viditelný deník.",
+    description: "Zapíše odpověď o sladkém od minula a osobní zprávu. Respektuje nastavenou pauzu po obou odpovědích; během čekání vrátí saved: false a čas další otázky.",
     inputSchema: {
       type: "object",
       properties: {
@@ -619,8 +802,14 @@ function registerWebMcpTools() {
       if (!input || !["kept", "treat"].includes(input.status)) throw new Error("Status musí být kept nebo treat.");
       if (input.status === "treat" && !String(input.name || "").trim()) throw new Error("U treat je potřeba uvést, co si uživatelka dala.");
       const record = { status: input.status, name: String(input.name || "").slice(0, 90), amount: String(input.amount || "").slice(0, 70) };
-      await saveCheckin(record);
-      return { saved: true, status: record.status, createdAt: new Date().toISOString() };
+      const result = await saveCheckin(record);
+      return {
+        saved: result.saved,
+        status: result.record.status,
+        createdAt: result.record.createdAt,
+        message: checkinMessage(result.record),
+        nextQuestionAt: new Date(result.nextAt).toISOString(),
+      };
     },
   });
   register({
@@ -632,7 +821,17 @@ function registerWebMcpTools() {
     execute() {
       const meals = state.meals.filter((item) => isToday(item.createdAt)).length;
       const today = state.checkins.filter((item) => isToday(item.createdAt));
-      return { date: localDayKey(Date.now()), meals, kept: today.filter((item) => item.status === "kept").length, treats: today.filter((item) => item.status === "treat").length };
+      const cycle = checkinCycle(state.checkins, state.checkinIntervalHours);
+      return {
+        date: localDayKey(Date.now()), meals,
+        kept: today.filter((item) => item.status === "kept").length,
+        treats: today.filter((item) => item.status === "treat").length,
+        checkin: {
+          ready: state.checkinsReady && !cycle.waiting,
+          intervalHours: state.checkinIntervalHours,
+          nextQuestionAt: cycle.waiting ? new Date(cycle.nextAt).toISOString() : null,
+        },
+      };
     },
   });
 }
@@ -643,9 +842,13 @@ async function init() {
   try {
     await loadSettings();
     await refreshData();
+    state.checkinsReady = true;
+    renderCheckin();
+    renderSettings();
   } catch (error) {
     console.error(error);
     toast("Deník se nepodařilo otevřít. Zkus stránku načíst znovu.");
+    $("#checkin-note").textContent = "Deník se nepodařilo otevřít. Zkus stránku načíst znovu.";
   }
   registerWebMcpTools();
   if ("serviceWorker" in navigator) {

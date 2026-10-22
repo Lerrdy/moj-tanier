@@ -1,4 +1,4 @@
-name: Deploy Môj tanier to GitHub Pages
+name: Deploy Můj talíř to GitHub Pages
 
 on:
   push:
@@ -23,6 +23,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+
+      - name: Check timed questions
+        run: |
+          npm ci --ignore-scripts
+          npm test
+          node --check dist/app.js
+          node --check dist/sw.js
 
       - name: Configure Pages
         uses: actions/configure-pages@v6

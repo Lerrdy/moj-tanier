@@ -11,7 +11,7 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%2332122f'/%3E%3Ccircle cx='32' cy='32' r='19' fill='%23fff8ef'/%3E%3Ccircle cx='32' cy='32' r='11' fill='%23e75480'/%3E%3Cpath d='M32 17v30M17 32h30' stroke='%23fff8ef' stroke-width='3' opacity='.8'/%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="./styles.css?v=7" />
+    <link rel="stylesheet" href="./styles.css?v=8" />
     <title>Můj talíř</title>
   </head>
   <body>
@@ -27,21 +27,31 @@
           <button class="avatar" type="button" data-go="settings" aria-label="Otevřít nastavení">M</button>
         </header>
 
-        <article class="checkin-card" id="checkin-card">
+        <article class="checkin-card" id="checkin-card" aria-label="Otázka o sladkém">
+          <div id="checkin-prompt">
           <div class="checkin-copy">
             <span class="mini-label">Malá zpráva pro tebe</span>
-            <h2>Jak to dneska jde se sladkým?</h2>
-            <p id="checkin-note">Ať je odpověď jakákoli, jsem s tebou.</p>
+            <h2 id="checkin-title">Tak co, šiško, dala sis něco sladkého?</h2>
+            <p id="checkin-note">Chvilku, otevírám tvůj deník…</p>
           </div>
           <div class="checkin-actions">
-            <button class="choice choice--good" id="kept-button" type="button">
+            <button class="choice choice--good" id="kept-button" type="button" disabled>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4.2 4.2L19 6.5"/></svg>
-              Zvládla jsem to
+              Nic jsem si nedala
             </button>
-            <button class="choice choice--treat" id="treat-button" type="button">
+            <button class="choice choice--treat" id="treat-button" type="button" disabled>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.7 5.7a5.3 5.3 0 0 0-7.5 0L12 6.9l-1.2-1.2a5.3 5.3 0 1 0-7.5 7.5L12 22l8.7-8.8a5.3 5.3 0 0 0 0-7.5Z"/></svg>
               Dala jsem si něco
             </button>
+          </div>
+          </div>
+          <div class="checkin-response" id="checkin-response" role="status" aria-live="polite" aria-atomic="true" tabindex="-1" hidden>
+            <span class="mini-label">Malá zpráva ode mě</span>
+            <h2 id="checkin-message"></h2>
+            <p class="checkin-answer" id="checkin-answer"></p>
+            <div class="checkin-next"><span aria-hidden="true">◷</span><p id="checkin-next"></p></div>
+            <p class="checkin-wait-note">Do té doby si klidně foť, co máš dobrého. 🤍</p>
+            <button class="checkin-detail-button" id="checkin-detail-button" type="button">Zobrazit odpověď</button>
           </div>
         </article>
 
@@ -128,10 +138,30 @@
           </div>
         </section>
 
+        <section class="settings-card" aria-labelledby="checkin-settings-title">
+          <div class="settings-card__top">
+            <div class="settings-icon settings-icon--berry" aria-hidden="true">♡</div>
+            <div class="settings-copy"><h2 id="checkin-settings-title">Kdy se tě mám zase zeptat?</h2><p>Po každé odpovědi si dáme pauzu. Ty si vyber, jak dlouhou.</p></div>
+          </div>
+          <label class="interval-setting" for="checkin-interval">Pauza mezi otázkami
+            <select id="checkin-interval" aria-describedby="checkin-interval-help" disabled>
+              <option value="1">1 hodina</option>
+              <option value="2">2 hodiny</option>
+              <option value="3">3 hodiny</option>
+              <option value="4">4 hodiny</option>
+              <option value="6" selected>6 hodin</option>
+              <option value="8">8 hodin</option>
+              <option value="12">12 hodin</option>
+              <option value="24">24 hodin</option>
+            </select>
+          </label>
+          <p class="fine-print" id="checkin-interval-help">Nový interval počítám od poslední odpovědi, takže se změní i aktuální čekání. Otázka se znovu objeví tady v appce.</p>
+        </section>
+
         <section class="settings-card" aria-labelledby="reminders-title">
           <div class="settings-card__top">
             <div class="settings-icon settings-icon--gold" aria-hidden="true">◷</div>
-            <div class="settings-copy"><h2 id="reminders-title">Jemná připomenutí</h2><p>Vyber si tři chvíle, kdy ti mám připomenout, ať se na moment zastavíš.</p></div>
+            <div class="settings-copy"><h2 id="reminders-title">Upozornění v telefonu</h2><p>Tahle upozornění mají vlastní pevné časy v Kalendáři. S pauzou mezi otázkami se neposouvají.</p></div>
           </div>
           <div class="time-grid">
             <label>Ráno<input id="reminder-1" type="time" value="10:00" /></label>
@@ -223,6 +253,6 @@
     </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
-    <script src="./app.js?v=7" defer></script>
+    <script src="./app.js?v=8" defer></script>
   </body>
 </html>
