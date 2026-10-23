@@ -19,9 +19,13 @@ const state = {
   reminderSequence: 0,
   savingMeal: false,
   savingCheckin: false,
+  preparingPhoto: false,
   pendingPhoto: null,
   pendingPhotoUrl: null,
   pendingPhotoTime: null,
+  pendingPhotoTimeSource: null,
+  pendingPhotoLocalTime: null,
+  pendingPhotoOffset: null,
   selected: null,
   objectUrls: [],
 };
@@ -79,6 +83,7 @@ async function putOne(storeName, value) {
     tx.objectStore(storeName).put(value);
     tx.oncomplete = () => resolve(value);
     tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error || new Error("Ukládání se nepodařilo dokončit."));
   });
 }
 
@@ -125,20 +130,39 @@ function isToday(value) {
   return localDayKey(value) === localDayKey(Date.now());
 }
 
-function formatTime(value) {
-  return new Intl.DateTimeFormat("cs-CZ", { hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+function formatTime(value, timeZone) {
+  return new Intl.DateTimeFormat("cs-CZ", { hour: "2-digit", minute: "2-digit", ...(timeZone ? { timeZone } : {}) }).format(new Date(value));
 }
 
-function formatDate(value, includeYear = false) {
+function formatDate(value, includeYear = false, timeZone) {
   return new Intl.DateTimeFormat("cs-CZ", {
     weekday: "long", day: "numeric", month: "long", ...(includeYear ? { year: "numeric" } : {}),
+    ...(timeZone ? { timeZone } : {}),
   }).format(new Date(value));
 }
 
-function formatDateTime(value) {
+function formatDateTime(value, timeZone) {
   return new Intl.DateTimeFormat("cs-CZ", {
     day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit",
+    ...(timeZone ? { timeZone } : {}),
   }).format(new Date(value));
+}
+
+// Preserve the wall clock printed in a photo, including photos taken abroad.
+function mealDayKey(meal) {
+  return meal.photoLocalTime ? meal.photoLocalTime.slice(0, 10) : localDayKey(meal.createdAt);
+}
+
+function formatMealTime(meal) {
+  return formatTime(meal.photoLocalTime ? `${meal.photoLocalTime}Z` : meal.createdAt, meal.photoLocalTime ? "UTC" : undefined);
+}
+
+function formatMealDate(meal) {
+  return formatDate(meal.photoLocalTime ? `${meal.photoLocalTime}Z` : meal.createdAt, false, meal.photoLocalTime ? "UTC" : undefined);
+}
+
+function formatMealDateTime(meal) {
+  return formatDateTime(meal.photoLocalTime ? `${meal.photoLocalTime}Z` : meal.createdAt, meal.photoLocalTime ? "UTC" : undefined);
 }
 
 function countLabel(count, singular, few, many) {
@@ -326,7 +350,7 @@ function mealRow(meal) {
     <button class="entry-row" type="button" data-entry-kind="meals" data-entry-id="${escapeHtml(meal.id)}">
       <img src="${photoUrl}" alt="" />
       <span class="entry-row__copy"><strong>${escapeHtml(meal.name || "Jídlo")}</strong><small>${escapeHtml(subtitle)}</small></span>
-      <time datetime="${escapeHtml(meal.createdAt)}">${formatTime(meal.createdAt)}</time>
+      <time datetime="${escapeHtml(meal.createdAt)}">${formatMealTime(meal)}</time>
     </button>`;
 }
 
@@ -350,7 +374,7 @@ function renderToday() {
   $("#today-date").textContent = formatDate(now);
 
   const entries = [
-    ...state.meals.filter((item) => isToday(item.createdAt)).map((item) => ({ ...item, kind: "meals" })),
+    ...state.meals.filter((item) => mealDayKey(item) === localDayKey(now)).map((item) => ({ ...item, kind: "meals" })),
     ...state.checkins.filter((item) => isToday(item.createdAt)).map((item) => ({ ...item, kind: "checkins" })),
   ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
@@ -373,7 +397,7 @@ function renderGallery() {
     return `
       <button class="gallery-card" type="button" data-entry-kind="meals" data-entry-id="${escapeHtml(meal.id)}">
         <img src="${photoUrl}" alt="${escapeHtml(meal.name || "Fotka jídla")}" loading="lazy" />
-        <span class="gallery-card__copy"><strong>${escapeHtml(meal.name || "Jídlo")}</strong><time datetime="${escapeHtml(meal.createdAt)}">${escapeHtml(formatDate(meal.createdAt))} · ${formatTime(meal.createdAt)}</time></span>
+        <span class="gallery-card__copy"><strong>${escapeHtml(meal.name || "Jídlo")}</strong><time datetime="${escapeHtml(meal.createdAt)}">${escapeHtml(formatMealDate(meal))} · ${formatMealTime(meal)}</time></span>
       </button>`;
   }).join("");
 }
@@ -382,11 +406,11 @@ function renderOverview() {
   const start = new Date();
   start.setHours(0, 0, 0, 0);
   start.setDate(start.getDate() - 6);
-  const recentMeals = state.meals.filter((item) => new Date(item.createdAt) >= start);
+  const recentMeals = state.meals.filter((item) => mealDayKey(item) >= localDayKey(start) && mealDayKey(item) <= localDayKey(Date.now()));
   const recentCheckins = state.checkins.filter((item) => new Date(item.createdAt) >= start);
   const kept = recentCheckins.filter((item) => item.status === "kept");
   const treats = recentCheckins.filter((item) => item.status === "treat");
-  const activeDays = new Set([...recentMeals, ...recentCheckins].map((item) => localDayKey(item.createdAt))).size;
+  const activeDays = new Set([...recentMeals.map(mealDayKey), ...recentCheckins.map((item) => localDayKey(item.createdAt))]).size;
 
   $("#week-score").textContent = `${activeDays}/7`;
   $("#meal-stat").textContent = recentMeals.length;
@@ -397,7 +421,7 @@ function renderOverview() {
     const date = new Date(start);
     date.setDate(start.getDate() + index);
     const key = localDayKey(date);
-    const dayMeals = recentMeals.filter((item) => localDayKey(item.createdAt) === key);
+    const dayMeals = recentMeals.filter((item) => mealDayKey(item) === key);
     const dayCheckins = recentCheckins.filter((item) => localDayKey(item.createdAt) === key);
     const hasTreat = dayCheckins.some((item) => item.status === "treat");
     const hasKept = dayCheckins.some((item) => item.status === "kept");
@@ -418,7 +442,7 @@ function renderOverview() {
     const isMeal = event.kind === "meals";
     const isTreat = event.status === "treat";
     const title = isMeal ? event.name || "Jídlo" : isTreat ? event.name || "Dala jsem si něco sladkého" : "Nic jsem si nedala";
-    const detail = [formatDate(event.createdAt), formatTime(event.createdAt), event.amount].filter(Boolean).join(" · ");
+    const detail = [isMeal ? formatMealDate(event) : formatDate(event.createdAt), isMeal ? formatMealTime(event) : formatTime(event.createdAt), event.amount].filter(Boolean).join(" · ");
     const iconClass = isMeal ? "is-meal" : isTreat ? "is-treat" : "";
     const icon = isMeal ? "●" : isTreat ? "♡" : "✓";
     return `<button class="timeline-item" type="button" data-entry-kind="${event.kind}" data-entry-id="${escapeHtml(event.id)}"><span class="timeline-dot ${iconClass}">${icon}</span><span class="timeline-copy"><strong>${escapeHtml(title)}</strong><p>${escapeHtml(detail)}</p></span></button>`;
@@ -453,8 +477,106 @@ async function refreshData() {
   renderAll();
 }
 
+function parsePhotoTimestamp(tags) {
+  if (typeof tags?.DateTimeOriginal !== "string") return null;
+  const match = /^(\d{4})[:-](\d{2})[:-](\d{2})[ T](\d{2}):(\d{2}):(\d{2})$/.exec(tags.DateTimeOriginal.trim());
+  if (!match) return null;
+  const [year, month, day, hours, minutes, seconds] = match.slice(1).map(Number);
+  const utc = Date.UTC(year, month - 1, day, hours, minutes, seconds);
+  const date = new Date(utc);
+  if (year < 1900 || date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day
+    || hours > 23 || minutes > 59 || seconds > 59) return null;
+
+  let timestamp;
+  const offset = tags.OffsetTimeOriginal;
+  if (offset !== undefined && offset !== null && offset !== "") {
+    if (typeof offset !== "string") return null;
+    const offsetMatch = /^([+-])(\d{2}):(\d{2})$/.exec(offset.trim());
+    if (!offsetMatch) return null;
+    const offsetMinutes = Number(offsetMatch[2]) * 60 + Number(offsetMatch[3]);
+    if (Number(offsetMatch[3]) > 59 || offsetMinutes > 14 * 60) return null;
+    timestamp = utc - (offsetMatch[1] === "+" ? 1 : -1) * offsetMinutes * 60 * 1000;
+  } else {
+    // EXIF without an offset describes a local clock time, never UTC.
+    const local = new Date(year, month - 1, day, hours, minutes, seconds);
+    if (local.getFullYear() !== year || local.getMonth() !== month - 1 || local.getDate() !== day
+      || local.getHours() !== hours || local.getMinutes() !== minutes) return null;
+    timestamp = local.getTime();
+  }
+  if (!Number.isFinite(timestamp) || timestamp > Date.now() + 24 * 60 * 60 * 1000) return null;
+  return new Date(timestamp).toISOString();
+}
+
+async function readPhotoCapture(file) {
+  if (!globalThis.exifr?.parse) return null;
+  try {
+    const tags = await globalThis.exifr.parse(file, {
+      pick: ["DateTimeOriginal", "OffsetTimeOriginal"],
+      reviveValues: false,
+      translateValues: false,
+      gps: false, xmp: false, iptc: false, icc: false, jfif: false, ihdr: false,
+    });
+    const timestamp = parsePhotoTimestamp(tags);
+    if (!timestamp) return null;
+    return {
+      timestamp,
+      localTime: tags.DateTimeOriginal.trim().slice(0, 10).replaceAll(":", "-") + "T" + tags.DateTimeOriginal.trim().slice(11),
+      offset: tags.OffsetTimeOriginal?.trim() || null,
+    };
+  } catch {
+    // Screenshots, forwarded photos and some exports contain no usable capture date.
+    return null;
+  }
+}
+
+async function readPhotoTimestamp(file) {
+  return (await readPhotoCapture(file))?.timestamp || null;
+}
+
+function localPhotoTime(value) {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "";
+  return `${localDayKey(date)}T${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+function parseLocalPhotoTime(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return null;
+  return parsePhotoTimestamp({ DateTimeOriginal: `${value.slice(0, 10).replaceAll("-", ":")} ${value.slice(11)}:00` });
+}
+
+function showMealTimeEditor(open) {
+  $("#meal-time-editor").hidden = !open;
+  $("#meal-change-time").setAttribute("aria-expanded", String(open));
+}
+
+function renderMealTime() {
+  $("#meal-timestamp").textContent = state.pendingPhotoTime
+    ? formatMealDateTime({ createdAt: state.pendingPhotoTime, photoLocalTime: state.pendingPhotoLocalTime }) : "Datum a čas ještě chybí";
+  $("#meal-time-source").textContent = state.pendingPhotoTimeSource === "exif"
+    ? "Datum a čas mám přímo z fotky. 🤍"
+    : state.pendingPhotoTimeSource === "camera" ? "Právě vyfoceno. Čas už máš doplněný."
+      : state.pendingPhotoTimeSource === "manual" ? "Použiju datum a čas, které sis vybrala."
+        : "V téhle fotce jsem čas nenašel. Doplň ho prosím, beruško.";
+}
+
+function updateMealTime() {
+  const value = $("#meal-datetime").value;
+  const expected = state.pendingPhotoLocalTime ? state.pendingPhotoLocalTime.slice(0, 16) : localPhotoTime(state.pendingPhotoTime);
+  if (state.pendingPhotoTime && value === expected) return state.pendingPhotoTime;
+  const time = parseLocalPhotoTime(value);
+  if (!time) return null;
+  state.pendingPhotoTime = time;
+  state.pendingPhotoTimeSource = "manual";
+  state.pendingPhotoLocalTime = null;
+  state.pendingPhotoOffset = null;
+  renderMealTime();
+  return time;
+}
+
 async function compressPhoto(file) {
-  if (!file?.type?.startsWith("image/")) throw new Error("Vybraný soubor není fotka.");
+  if (!file || !(file.type?.startsWith("image/") || /\.(?:jpe?g|png|webp|gif|heic|heif|avif)$/i.test(file.name || ""))) {
+    throw new Error("Vybraný soubor není fotka.");
+  }
   const sourceUrl = URL.createObjectURL(file);
   try {
     const image = new Image();
@@ -469,41 +591,79 @@ async function compressPhoto(file) {
     canvas.width = width;
     canvas.height = height;
     const context = canvas.getContext("2d", { alpha: false });
+    if (!context) throw new Error("Fotku se nepodařilo připravit.");
     context.fillStyle = "#ffffff";
     context.fillRect(0, 0, width, height);
     context.drawImage(image, 0, 0, width, height);
-    return await new Promise((resolve) => canvas.toBlob((blob) => resolve(blob || file), "image/jpeg", .84));
+    return await new Promise((resolve, reject) => canvas.toBlob((blob) => {
+      if (blob?.type === "image/jpeg") resolve(blob);
+      else reject(new Error("Fotku se nepodařilo převést do JPEG."));
+    }, "image/jpeg", .84));
   } finally {
     URL.revokeObjectURL(sourceUrl);
   }
 }
 
-async function stagePhoto(file) {
+async function stagePhoto(file, source = "camera") {
+  if (state.preparingPhoto || state.savingMeal) return;
+  state.preparingPhoto = true;
+  const triggers = $$("[data-photo-trigger]");
+  triggers.forEach((button) => { button.disabled = true; });
+  const pickedAt = new Date().toISOString();
   try {
     toast("Chvilku, upravuju fotku…");
-    state.pendingPhoto = await compressPhoto(file);
-    state.pendingPhotoTime = new Date().toISOString();
+    // Read the original before the canvas conversion removes its metadata.
+    const capture = await readPhotoCapture(file);
+    const photo = await compressPhoto(file);
+    state.pendingPhoto = photo;
+    state.pendingPhotoTime = capture?.timestamp || (source === "camera" ? pickedAt : null);
+    state.pendingPhotoTimeSource = capture ? "exif" : source === "camera" ? "camera" : null;
+    state.pendingPhotoLocalTime = capture?.localTime || null;
+    state.pendingPhotoOffset = capture?.offset || null;
     if (state.pendingPhotoUrl) URL.revokeObjectURL(state.pendingPhotoUrl);
     state.pendingPhotoUrl = URL.createObjectURL(state.pendingPhoto);
     $("#meal-preview").src = state.pendingPhotoUrl;
-    $("#meal-timestamp").textContent = formatDateTime(state.pendingPhotoTime);
     $("#meal-form").reset();
+    $("#meal-datetime").value = capture ? capture.localTime.slice(0, 16) : state.pendingPhotoTime ? localPhotoTime(state.pendingPhotoTime) : "";
+    $("#meal-datetime").max = localPhotoTime(Date.now() + 24 * 60 * 60 * 1000);
+    $("#meal-time-note").textContent = capture
+      ? "Ukazuju čas přímo z fotky, i když byla pořízená v zahraničí. Při ruční změně použiju čas telefonu."
+      : "Datum a čas jsou podle nastavení telefonu. Když je potřeba, můžeš je upravit.";
+    showMealTimeEditor(!state.pendingPhotoTime);
+    renderMealTime();
     openDialog("meal-dialog");
   } catch (error) {
     console.error(error);
-    toast("Fotku se nepodařilo načíst. Zkus prosím jinou.");
+    toast(/\.(?:heic|heif)$/i.test(file?.name || "") || /heic|heif/i.test(file?.type || "")
+      ? "Tuhle HEIC fotku telefon neotevřel. Zkus ji vybrat ve formátu JPEG."
+      : "Fotku se nepodařilo načíst. Zkus prosím jinou.");
+  } finally {
+    state.preparingPhoto = false;
+    triggers.forEach((button) => { button.disabled = false; });
   }
 }
 
 async function saveMeal(event) {
   event.preventDefault();
   if (!state.pendingPhoto || state.savingMeal) return;
+  const capturedAt = updateMealTime();
+  if (!capturedAt) {
+    showMealTimeEditor(true);
+    $("#meal-datetime").focus();
+    toast("Doplň prosím platné datum a čas, beruško.");
+    return;
+  }
   state.savingMeal = true;
   const submitButton = event.currentTarget.querySelector('[type="submit"]');
+  const controls = $$("#meal-form input, #meal-form textarea, #meal-form button, [data-photo-trigger]");
+  controls.forEach((control) => { control.disabled = true; });
   submitButton.disabled = true;
   const meal = {
     id: uid(),
-    createdAt: state.pendingPhotoTime || new Date().toISOString(),
+    createdAt: capturedAt,
+    photoTimeSource: state.pendingPhotoTimeSource,
+    photoLocalTime: state.pendingPhotoLocalTime,
+    photoOffset: state.pendingPhotoOffset,
     name: $("#meal-name").value.trim(),
     amount: $("#meal-amount").value.trim(),
     note: $("#meal-note").value.trim(),
@@ -521,6 +681,10 @@ async function saveMeal(event) {
     state.pendingPhoto = null;
     if (state.pendingPhotoUrl) URL.revokeObjectURL(state.pendingPhotoUrl);
     state.pendingPhotoUrl = null;
+    state.pendingPhotoTime = null;
+    state.pendingPhotoTimeSource = null;
+    state.pendingPhotoLocalTime = null;
+    state.pendingPhotoOffset = null;
     state.meals.push(meal);
     announceJournalChange();
     try {
@@ -532,6 +696,7 @@ async function saveMeal(event) {
     toast("Hotovo, beruško. Jídlo je uložené i offline.");
   } finally {
     state.savingMeal = false;
+    controls.forEach((control) => { control.disabled = false; });
     submitButton.disabled = false;
   }
 }
@@ -575,7 +740,7 @@ async function openEntry(kind, id) {
   $("#entry-dialog-title").textContent = isMeal ? record.name || "Jídlo" : isTreat ? record.name || "Dala jsem si něco sladkého" : "Nic jsem si nedala";
   const photo = isMeal ? `<img class="detail-photo" src="${makeObjectUrl(record.photo)}" alt="${escapeHtml(record.name || "Fotka jídla")}" />` : "";
   const lines = [
-    `<p><strong>Kdy:</strong> ${escapeHtml(formatDateTime(record.createdAt))}</p>`,
+    `<p><strong>Kdy:</strong> ${escapeHtml(isMeal ? formatMealDateTime(record) : formatDateTime(record.createdAt))}</p>`,
     record.amount ? `<p><strong>Množství:</strong> ${escapeHtml(record.amount)}</p>` : "",
     record.note ? `<p><strong>Poznámka:</strong> ${escapeHtml(record.note)}</p>` : "",
     !isMeal ? `<p>${escapeHtml(checkinMessage(record))}</p>` : "",
@@ -700,15 +865,25 @@ function bindEvents() {
     if (entry) await openEntry(entry.dataset.entryKind, entry.dataset.entryId);
   });
 
-  ["meal-photo", "gallery-photo"].forEach((id) => {
+  ["meal-photo", "gallery-photo", "library-photo"].forEach((id) => {
     document.getElementById(id).addEventListener("change", async (event) => {
       const [file] = event.target.files || [];
       event.target.value = "";
-      if (file) await stagePhoto(file);
+      if (file) await stagePhoto(file, id === "library-photo" ? "gallery" : "camera");
     });
   });
 
   $("#meal-form").addEventListener("submit", saveMeal);
+  $("#meal-dialog").addEventListener("cancel", (event) => {
+    if (state.savingMeal) event.preventDefault();
+  });
+  $("#meal-change-time").addEventListener("click", () => {
+    const open = $("#meal-time-editor").hidden;
+    showMealTimeEditor(open);
+    if (open) $("#meal-datetime").focus();
+  });
+  $("#meal-datetime").addEventListener("change", updateMealTime);
+  $("#meal-datetime").addEventListener("invalid", () => showMealTimeEditor(true));
   $("#kept-button").addEventListener("click", async () => {
     try {
       const result = await saveCheckin({ status: "kept" });
@@ -819,7 +994,7 @@ function registerWebMcpTools() {
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
     annotations: { readOnlyHint: true, untrustedContentHint: false },
     execute() {
-      const meals = state.meals.filter((item) => isToday(item.createdAt)).length;
+      const meals = state.meals.filter((item) => mealDayKey(item) === localDayKey(Date.now())).length;
       const today = state.checkins.filter((item) => isToday(item.createdAt));
       const cycle = checkinCycle(state.checkins, state.checkinIntervalHours);
       return {

@@ -178,6 +178,13 @@ h2 { margin-bottom: 0; font-size: 1.18rem; line-height: 1.2; letter-spacing: -.0
 .camera-button span { display: grid; gap: 2px; }
 .camera-button strong { font-size: 1rem; }
 .camera-button small { color: white; font-size: .78rem; opacity: .92; }
+.gallery-import-button { display: flex; align-items: center; gap: 13px; width: 100%; min-height: 64px; margin-top: 24px; padding: 13px 16px; border: 1px solid var(--line); border-radius: 20px; background: white; color: var(--plum-900); text-align: left; }
+.gallery-import-button svg { width: 26px; height: 26px; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.gallery-import-button span { display: grid; gap: 3px; }
+.gallery-import-button strong { font-size: .94rem; }
+.gallery-import-button small { color: var(--muted); font-size: .76rem; }
+.gallery-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: -5px 0 22px; }
+.gallery-actions .secondary-button { min-height: 46px; padding: 10px 8px; font-size: .84rem; }
 
 .section-heading { justify-content: space-between; margin-bottom: 12px; }
 .section-heading > span { font-size: .8rem; color: var(--muted); font-weight: 700; }
@@ -345,6 +352,14 @@ dialog::backdrop { background: rgba(26, 7, 24, .65); backdrop-filter: blur(5px);
 .form-grid input, .form-grid textarea { width: 100%; min-width: 0; padding: 12px 13px; border: 1px solid var(--line); border-radius: 14px; background: white; color: var(--ink); font-size: .9rem; resize: vertical; }
 .full-field { grid-column: 1 / -1; }
 .timestamp-row { gap: 7px; margin: -2px 0 16px; color: var(--muted); font-size: .76rem; }
+.timestamp-row #meal-timestamp { flex: 1; }
+.timestamp-edit { min-height: 44px; padding: 8px; border: 0; background: transparent; color: var(--raspberry-deep); font-size: .8rem; font-weight: 750; text-decoration: underline; text-underline-offset: 3px; }
+.photo-time-source { margin: -9px 0 16px; color: var(--muted); font-size: .78rem; line-height: 1.5; }
+.meal-time-editor { display: grid; gap: 8px; margin-bottom: 18px; padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: white; }
+.meal-time-editor[hidden] { display: none; }
+.meal-time-editor label { font-size: .83rem; font-weight: 800; }
+.meal-time-editor input { width: 100%; min-width: 0; min-height: 48px; padding: 10px 8px; border: 1px solid var(--line); border-radius: 11px; color: var(--ink); background: var(--cream); font-size: 1rem; }
+.meal-time-editor .fine-print { margin: 0; }
 .dialog-intro { margin: -3px 0 15px; color: var(--muted); font-size: .87rem; line-height: 1.55; }
 .detail-meta { display: grid; gap: 8px; margin-top: 16px; }
 .detail-meta p { margin: 0; color: var(--muted); line-height: 1.5; font-size: .88rem; }

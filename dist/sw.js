@@ -1,10 +1,11 @@
 const CACHE_PREFIX = "moj-tanier-";
-const CACHE_NAME = `${CACHE_PREFIX}v8`;
+const CACHE_NAME = `${CACHE_PREFIX}v10`;
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css?v=8",
-  "./app.js?v=8",
+  "./styles.css?v=10",
+  "./vendor/exifr.umd.js?v=10",
+  "./app.js?v=10",
   "./manifest.webmanifest",
   "./icon.svg",
   "./apple-touch-icon.png",

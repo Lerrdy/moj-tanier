@@ -24,9 +24,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Check timed questions
+      - name: Check app
         run: |
           npm ci --ignore-scripts
+          npm run vendor
           npm test
           node --check dist/app.js
           node --check dist/sw.js

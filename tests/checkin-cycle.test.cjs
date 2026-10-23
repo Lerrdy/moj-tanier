@@ -1,58 +1,6 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const fs = require("node:fs");
-const path = require("node:path");
-const vm = require("node:vm");
-const { randomUUID } = require("node:crypto");
-const { IDBFactory } = require("fake-indexeddb");
-
-process.env.TZ = "Europe/Prague";
-const source = fs.readFileSync(path.join(__dirname, "../dist/app.js"), "utf8")
-  .replace(/\binit\(\);\s*$/, "globalThis.initialized = init();");
-const start = Date.parse("2026-10-22T08:00:00+02:00");
-const hour = 60 * 60 * 1000;
-
-// Run the actual app with controllable time and isolated IndexedDB, never a user's diary.
-function createApp(factory = new IDBFactory(), clock = { now: start }) {
-  class ClockDate extends Date {
-    constructor(...args) { super(...(args.length ? args : [clock.now])); }
-    static now() { return clock.now; }
-  }
-  const nodes = new Map();
-  const tools = new Map();
-  const timers = new Map();
-  const events = new Map();
-  let timerId = 0;
-  function node(selector) {
-    if (!nodes.has(selector)) nodes.set(selector, {
-      value: selector.includes("reminder-") ? "10:00" : "6",
-      disabled: true, hidden: false, textContent: "", innerHTML: "", open: false,
-      handlers: new Map(),
-      classList: { add() {}, remove() {}, toggle() {} },
-      addEventListener(name, callback) { this.handlers.set(name, callback); },
-      querySelector() { return node("#treat-form [type='submit']"); },
-      focus() {}, reset() {}, showModal() { this.open = true; }, close() { this.open = false; },
-    });
-    return nodes.get(selector);
-  }
-  const document = {
-    hidden: false,
-    querySelector: node, querySelectorAll: () => [], getElementById: (id) => node(`#${id}`),
-    addEventListener: (name, callback) => events.set(name, callback),
-    modelContext: { registerTool: (tool) => tools.set(tool.name, tool) },
-  };
-  const context = vm.createContext({
-    indexedDB: factory, Date: ClockDate, Intl, console, URL, URLSearchParams,
-    crypto: { randomUUID }, document,
-    window: { matchMedia: () => ({ matches: false }), navigator: {}, scrollTo() {}, addEventListener: (name, callback) => events.set(name, callback) },
-    navigator: { onLine: true }, location: { search: "" },
-    setTimeout: (callback, delay) => { const id = ++timerId; timers.set(id, { callback, delay }); return id; },
-    clearTimeout: (id) => timers.delete(id),
-  });
-  vm.runInContext(source, context, { filename: "app.js" });
-  const api = vm.runInContext("({ state, saveCheckin, checkinCycle, latestCheckin, chooseKeptMessage, checkinMessage, renderCheckin, loadSettings, refreshData, putOne, getAll, deleteOne, clearJournal, saveCheckinInterval, syncJournal, dbPromise, KEPT_MESSAGES, TREAT_MESSAGE })", context);
-  return { api, node, clock, factory, context, tools, events, timers, ready: context.initialized };
-}
+const { createApp, start, hour, IDBFactory } = require("./helpers/app.cjs");
 
 test("initial load disables answers; a saved answer locks both buttons for six hours", async () => {
   const app = createApp();
